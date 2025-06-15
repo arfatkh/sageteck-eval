@@ -10,16 +10,21 @@ class TransactionStatus(str, enum.Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     SUSPICIOUS = "suspicious"
+    FLAGGED = "flagged"
+    REFUNDED = "refunded"
 
 
 class PaymentMethod(str, enum.Enum):
     CREDIT_CARD = "credit_card"
-    DEBIT_CARD = "debit_card"
+    APPLE_PAY = "apple_pay"
+    GOOGLE_PAY = "google_pay"
     PAYPAL = "paypal"
     BANK_TRANSFER = "bank_transfer"
 
 
 class Transaction(Base):
+    __tablename__ = "transaction"
+
     id = Column(Integer, primary_key=True, index=True)
     customer_id = Column(Integer, ForeignKey("customer.id"))
     product_id = Column(Integer, ForeignKey("product.id"))
@@ -32,6 +37,11 @@ class Transaction(Base):
     # Relationships
     customer = relationship("Customer", back_populates="transactions")
     product = relationship("Product", back_populates="transactions")
+    
+    @property
+    def total_amount(self) -> float:
+        """Calculate total amount."""
+        return float(self.price * self.quantity)
     
     def __repr__(self):
         return f"<Transaction {self.id} - {self.status}>" 
