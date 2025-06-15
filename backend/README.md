@@ -1,85 +1,92 @@
-# TechMart Analytics Dashboard Backend
+# TechMart Analytics Dashboard
 
-This is the backend service for the TechMart Analytics Dashboard, built with FastAPI and PostgreSQL.
+Real-time analytics dashboard for TechMart e-commerce platform with transaction processing, anomaly detection, and business insights.
 
-## Setup
+## Quick Start with Docker
 
-1. Create and activate virtual environment:
 ```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# Clone and start services
+git clone <repository-url>
+cd techmart-analytics
+docker-compose up
 ```
 
-2. Install dependencies:
-```bash
-pip install -r requirements.txt
+The API will be available at `http://localhost:8000`
+
+## Hot Reload Development
+
+**Docker automatically enables hot reload - your code changes are instantly reflected!**
+
+```yaml
+# Already configured in docker-compose.yml:
+volumes:
+  - ./backend:/app  # Maps local code to container
+command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-3. Set up environment variables:
-Create a `.env` file in the backend directory with:
-```env
-DATABASE_URL=postgresql://user:password@localhost:5432/techmart
-SECRET_KEY=your-secret-key
-```
+Just make changes to your code and save - the server will automatically reload.
 
-4. Database Setup:
-- Install PostgreSQL if not already installed
-- Create a database named 'techmart'
-- The application will automatically create all necessary tables on startup
+## API Endpoints
+
+- **Dashboard**
+  - `GET /api/dashboard/overview` - System overview with real-time metrics
+  
+- **Transactions**
+  - `POST /api/transactions` - Create transaction
+  - `GET /api/transactions/suspicious` - Get suspicious transactions
+  
+- **Inventory**
+  - `GET /api/inventory/low-stock` - Get low stock alerts
+  - `GET /api/inventory/products` - List products
+  
+- **Analytics**
+  - `GET /api/analytics/hourly-sales` - Get hourly sales data
+  - `GET /api/analytics/customer-insights` - Get customer metrics
+  
+- **Alerts**
+  - `POST /api/alerts` - Create system alert
+  - `GET /api/alerts/system-status` - Get system status
+
+Full API documentation: 
+- Swagger UI: `http://localhost:8000/docs`
+- ReDoc: `http://localhost:8000/redoc`
 
 ## Data Import
 
-The application comes with data import utilities for CSV files. Sample data files are provided in the `data` directory:
+Sample data files (in `data/` directory):
+- `products.csv` (500 products)
+- `customers.csv` (1000 customers)
+- `transactions.csv` (5000 transactions)
+- `suppliers.csv` (50 suppliers)
 
-- `products.csv`: Product catalog data
-- `customers.csv`: Customer information
-- `transactions.csv`: Sales transaction records
-- `suppliers.csv`: Supplier information
+Data is automatically imported on container startup.
 
-To import the data, run the import script:
-```bash
-# Activate your virtual environment first
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+## Features
 
-# Run the import script for specific data
-python -m scripts.import_data
-```
+- Real-time analytics dashboard
+- Fraud detection system
+- Low stock monitoring
+- Customer insights
+- Transaction processing
+- Automated alerts
 
-Expected CSV formats:
+## Tech Stack
 
-1. products.csv:
-   - Headers: name, description, price, stock_quantity, category
+- Backend: FastAPI + PostgreSQL
+- Infrastructure: Docker + Docker Compose
+- Database ORM: SQLAlchemy
+- Development: Hot Reload enabled
 
-2. customers.csv:
-   - Headers: name, email, phone, address
+## Development Notes
 
-3. transactions.csv:
-   - Headers: customer, product, quantity, amount, date
-   (These will be mapped to: customer_id, product_id, quantity, total_amount, transaction_date)
+- API automatically handles data validation
+- Real-time fraud detection is active
+- Comprehensive error handling implemented
+- Database migrations handled automatically
+- API documentation auto-generated
 
-4. suppliers.csv:
-   - Headers: name, contact_person, email, phone, address
+## Monitoring
 
-## Running the Application
-
-Start the FastAPI server:
-```bash
-uvicorn app.main:app --reload
-```
-
-The API will be available at `http://127.0.0.1:8000`
-
-## API Documentation
-
-- Swagger UI: `http://127.0.0.1:8000/docs`
-- ReDoc: `http://127.0.0.1:8000/redoc`
-
-## Database Management
-
-The application uses SQLAlchemy's declarative models for database schema management. Tables are automatically created on application startup based on the SQLAlchemy models defined in the `app/models` directory.
-
-To modify the database schema:
-1. Update the relevant model in `app/models/`
-2. Restart the application - tables will be automatically updated
-
-Note: For production environments, it's recommended to implement proper database migrations using tools like Alembic. 
+Access metrics and health checks:
+- Health: `http://localhost:8000/health`
+- Metrics: `http://localhost:8000/metrics` 

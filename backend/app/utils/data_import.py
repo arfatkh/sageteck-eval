@@ -2,6 +2,7 @@ import pandas as pd
 from sqlalchemy.orm import Session
 from typing import Type, Dict, Any
 from sqlalchemy.ext.declarative import DeclarativeMeta
+from sqlalchemy import text
 
 def import_csv_to_db(
     db: Session,
@@ -24,6 +25,13 @@ def import_csv_to_db(
         tuple: (number of records processed, number of records imported)
     """
     try:
+        # Clear existing data from the table using CASCADE
+        print(f"Clearing existing data from {model.__tablename__}...")
+        # First disable foreign key checks
+        db.execute(text("SET CONSTRAINTS ALL DEFERRED"))
+        db.query(model).delete()
+        db.commit()
+        
         # Read CSV in chunks to handle large files
         chunks = pd.read_csv(csv_file, chunksize=chunk_size)
         total_processed = 0
