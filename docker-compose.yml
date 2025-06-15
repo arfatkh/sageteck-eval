@@ -1,0 +1,44 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app #for hot reload
+      - ./backend/data:/app/data
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/techmart
+      - SECRET_KEY=your-secret-key-here
+      - CORS_ORIGINS=["http://localhost:3000"]
+    depends_on:
+      - db
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - techmart_network
+
+  db:
+    image: postgres:14
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=techmart
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - techmart_network
+
+networks:
+  techmart_network:
+
+volumes:
+  postgres_data: 
+  
