@@ -38,6 +38,19 @@ class Transaction(Base):
     customer = relationship("Customer", back_populates="transactions")
     product = relationship("Product", back_populates="transactions")
     
+    # In-memory storage for fraud check result
+    _fraud_check_result = None
+    
+    @property
+    def fraud_check_result(self):
+        """Get fraud check result."""
+        return self._fraud_check_result
+    
+    @fraud_check_result.setter
+    def fraud_check_result(self, value):
+        """Set fraud check result."""
+        self._fraud_check_result = value
+    
     @property
     def total_amount(self) -> float:
         """Calculate total amount."""

@@ -17,16 +17,16 @@ export const Analytics: React.FC = () => {
           <KeyMetrics />
         </Grid>
         <Grid item xs={12}>
-          <Widget title="Sales by Category">
-            <SalesByCategory />
-          </Widget>
-        </Grid>
-        <Grid item xs={12}>
           <Widget title="Customer Behavior Analysis">
             <CustomerBehavior />
           </Widget>
         </Grid>
-        <Grid item xs={12}>
+        <Grid item xs={12} md={4}>
+          <Widget title="Sales by Category">
+            <SalesByCategory />
+          </Widget>
+        </Grid>
+        <Grid item xs={12} md={8}>
           <Widget title="Geographic Distribution">
             <GeographicAnalytics />
           </Widget>

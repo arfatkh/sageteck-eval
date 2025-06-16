@@ -135,3 +135,22 @@ Result:
 - Customer total_spent now accurately reflects their completed transaction history
 - Total spent updates automatically with new transactions
 - System maintains consistency between transactions and customer totals 
+
+
+
+
+1. Added alerts to dashbard 
+- both system alerts and manual alerts
+
+2. Added a new endpoint to get the total sales for a given time range
+
+3. Moving to analytics page
+
+
+
+Working on challenges : Fraud Detection System 
+
+Added Redis for Optization 
+
+
+NOTE: WORKING ON FRONDEND DOCEKERIZATION BUT STILL SOME ERRORS SO USE npm install for now

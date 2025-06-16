@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Grid, Paper, Typography, useTheme } from '@mui/material';
+import { Box, Grid, Paper, Typography, useTheme, CircularProgress } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../../utils/api';
 import { Doughnut, Bar } from 'react-chartjs-2';
@@ -46,6 +46,13 @@ interface CustomerBehaviorData {
   };
 }
 
+interface CustomersResponse {
+  total: number;
+  items: any[];
+  page: number;
+  pages: number;
+}
+
 const MetricCard = ({ title, value, subtitle }: { title: string; value: string | number; subtitle?: string }) => (
   <Paper
     sx={{
@@ -75,10 +82,19 @@ const MetricCard = ({ title, value, subtitle }: { title: string; value: string |
 export const CustomerBehavior: React.FC = () => {
   const theme = useTheme();
 
-  const { data, isLoading } = useQuery<CustomerBehaviorData>({
+  const { data: behaviorData, isLoading: isLoadingBehavior } = useQuery<CustomerBehaviorData>({
     queryKey: ['customerBehavior'],
     queryFn: async () => {
       const response = await apiClient.get('/analytics/customer/behavior');
+      return response.data;
+    },
+    refetchInterval: 60000, // Refresh every minute
+  });
+
+  const { data: customersData, isLoading: isLoadingCustomers } = useQuery<CustomersResponse>({
+    queryKey: ['customers'],
+    queryFn: async () => {
+      const response = await apiClient.get('/customers');
       return response.data;
     },
     refetchInterval: 60000, // Refresh every minute
@@ -88,10 +104,10 @@ export const CustomerBehavior: React.FC = () => {
     labels: ['High Value', 'Medium Value', 'Low Value'],
     datasets: [
       {
-        data: data ? [
-          data.customer_segments.high_value,
-          data.customer_segments.medium_value,
-          data.customer_segments.low_value,
+        data: behaviorData ? [
+          behaviorData.customer_segments.high_value,
+          behaviorData.customer_segments.medium_value,
+          behaviorData.customer_segments.low_value,
         ] : [],
         backgroundColor: [
           theme.palette.success.main,
@@ -109,10 +125,10 @@ export const CustomerBehavior: React.FC = () => {
     datasets: [
       {
         label: 'Number of Customers',
-        data: data ? [
-          data.purchase_frequency.frequency_distribution.single_purchase,
-          data.purchase_frequency.frequency_distribution['2-5_purchases'],
-          data.purchase_frequency.frequency_distribution['6+_purchases'],
+        data: behaviorData ? [
+          behaviorData.purchase_frequency.frequency_distribution.single_purchase,
+          behaviorData.purchase_frequency.frequency_distribution['2-5_purchases'],
+          behaviorData.purchase_frequency.frequency_distribution['6+_purchases'],
         ] : [],
         backgroundColor: [
           alpha(theme.palette.primary.main, 0.6),
@@ -148,7 +164,7 @@ export const CustomerBehavior: React.FC = () => {
     },
   };
 
-  if (isLoading) {
+  if (isLoadingBehavior || isLoadingCustomers) {
     return (
       <Box sx={{ height: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Typography color="text.secondary">Loading customer behavior data...</Typography>
@@ -156,27 +172,32 @@ export const CustomerBehavior: React.FC = () => {
     );
   }
 
+  const totalCustomers = customersData?.total || 0;
+  const activeCustomers = behaviorData?.retention_metrics.retained_customers || 0;
+  const retentionRate = ((activeCustomers / totalCustomers) * 100).toFixed(1);
+
   return (
     <Grid container spacing={3}>
       {/* Metrics Cards */}
       <Grid item xs={12} md={4}>
         <MetricCard
-          title="Total Customers"
-          value={data?.retention_metrics.total_customers.toLocaleString() || '0'}
+          title="Total Registered Customers"
+          value={totalCustomers.toLocaleString()}
+          subtitle="All customers who have registered"
+        />
+      </Grid>
+      <Grid item xs={12} md={4}>
+        <MetricCard
+          title="Active Customers (30d)"
+          value={activeCustomers.toLocaleString()}
+          subtitle="Customers with purchases in last 30 days"
         />
       </Grid>
       <Grid item xs={12} md={4}>
         <MetricCard
           title="Retention Rate"
-          value={`${data?.retention_metrics.retention_rate.toFixed(1)}%`}
-          subtitle={`${data?.retention_metrics.retained_customers.toLocaleString()} retained customers`}
-        />
-      </Grid>
-      <Grid item xs={12} md={4}>
-        <MetricCard
-          title="Average Purchases"
-          value={data?.purchase_frequency.average_purchases.toFixed(1) || '0'}
-          subtitle="purchases per customer"
+          value={`${retentionRate}%`}
+          subtitle="Active vs Total Customers"
         />
       </Grid>
 

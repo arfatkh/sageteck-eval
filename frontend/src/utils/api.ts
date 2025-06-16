@@ -1,8 +1,11 @@
 import axios from 'axios';
 
+// Get the API base URL from environment variable or use default
+const API_BASE_URL = process.env.REACT_APP_API_URL || '/api/v1';
+
 // Create axios instance with default config
 export const apiClient = axios.create({
-  baseURL: '/api/v1', // Now requests will go to /api/v1/...
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },

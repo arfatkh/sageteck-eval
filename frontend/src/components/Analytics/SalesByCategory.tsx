@@ -86,12 +86,16 @@ export const SalesByCategory: React.FC = () => {
     plugins: {
       legend: {
         position: 'right' as const,
+        align: 'center' as const,
         labels: {
-          color: theme.palette.text.primary,
+          color: '#FFFFFF',
           padding: 20,
           font: {
-            size: 12,
+            size: 14,
+            weight: 'bold' as const,
           },
+          boxWidth: 20,
+          boxHeight: 20,
           generateLabels: (chart: any) => {
             const data = chart.data;
             if (data.labels.length && data.datasets.length) {
@@ -102,8 +106,8 @@ export const SalesByCategory: React.FC = () => {
                 return {
                   text: `${label} (${percentage}%)`,
                   fillStyle: data.datasets[0].backgroundColor[index],
-                  strokeStyle: data.datasets[0].borderColor,
-                  lineWidth: data.datasets[0].borderWidth,
+                  strokeStyle: theme.palette.background.paper,
+                  lineWidth: 2,
                   hidden: false,
                   index,
                 };
@@ -111,6 +115,8 @@ export const SalesByCategory: React.FC = () => {
             }
             return [];
           },
+          usePointStyle: true,
+          pointStyle: 'circle',
         },
       },
       tooltip: {
@@ -152,7 +158,7 @@ export const SalesByCategory: React.FC = () => {
           {Object.entries(data.category_performance).map(([category, metrics]) => (
             <Grid item xs={12} key={category}>
               <Paper sx={{ p: 2 }}>
-                <Typography variant="subtitle1" gutterBottom>
+                <Typography variant="subtitle1" gutterBottom color="white">
                   {category}
                 </Typography>
                 <Grid container spacing={2}>

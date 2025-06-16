@@ -1,92 +1,210 @@
-# TechMart Analytics Dashboard
+# TechMart Analytics Backend
 
-Real-time analytics dashboard for TechMart e-commerce platform with transaction processing, anomaly detection, and business insights.
+FastAPI-based backend service for the TechMart Analytics Dashboard.
 
-## Quick Start with Docker
+## Technical Stack
 
+- **Framework**: FastAPI
+- **Database**: PostgreSQL
+- **ORM**: SQLAlchemy
+- **Authentication**: JWT
+- **Caching**: Redis
+- **Container**: Docker
+
+## Development Setup
+
+### Local Development
+
+1. Create a virtual environment:
 ```bash
-# Clone and start services
-git clone <repository-url>
-cd techmart-analytics
-docker-compose up
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-The API will be available at `http://localhost:8000`
-
-## Hot Reload Development
-
-**Docker automatically enables hot reload - your code changes are instantly reflected!**
-
-```yaml
-# Already configured in docker-compose.yml:
-volumes:
-  - ./backend:/app  # Maps local code to container
-command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+2. Install dependencies:
+```bash
+pip install -r requirements.txt
 ```
 
-Just make changes to your code and save - the server will automatically reload.
+3. Set up environment variables:
+```bash
+cp .env.example .env
+# Edit .env with your configuration
+```
 
-## API Endpoints
+4. Run development server:
+```bash
+uvicorn app.main:app --reload
+```
 
-- **Dashboard**
-  - `GET /api/dashboard/overview` - System overview with real-time metrics
-  
-- **Transactions**
-  - `POST /api/transactions` - Create transaction
-  - `GET /api/transactions/suspicious` - Get suspicious transactions
-  
-- **Inventory**
-  - `GET /api/inventory/low-stock` - Get low stock alerts
-  - `GET /api/inventory/products` - List products
-  
-- **Analytics**
-  - `GET /api/analytics/hourly-sales` - Get hourly sales data
-  - `GET /api/analytics/customer-insights` - Get customer metrics
-  
-- **Alerts**
-  - `POST /api/alerts` - Create system alert
-  - `GET /api/alerts/system-status` - Get system status
+### Docker Development
 
-Full API documentation: 
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
+1. Build and start services:
+```bash
+docker-compose up -d --build
+```
 
-## Data Import
+2. View logs:
+```bash
+docker-compose logs -f backend
+```
 
-Sample data files (in `data/` directory):
-- `products.csv` (500 products)
-- `customers.csv` (1000 customers)
-- `transactions.csv` (5000 transactions)
-- `suppliers.csv` (50 suppliers)
+## Project Structure
 
-Data is automatically imported on container startup.
+```
+backend/
+├── app/
+│   ├── api/              # API endpoints
+│   │   └── v1/          # API version 1
+│   ├── core/            # Core configurations
+│   ├── db/              # Database configurations
+│   ├── models/          # SQLAlchemy models
+│   ├── schemas/         # Pydantic schemas
+│   ├── services/        # Business logic
+│   └── utils/           # Utility functions
+├── scripts/             # Management scripts
+├── tests/               # Test suite
+├── Dockerfile          
+├── requirements.txt    
+└── README.md          
+```
 
-## Features
+## API Documentation
 
-- Real-time analytics dashboard
-- Fraud detection system
-- Low stock monitoring
-- Customer insights
-- Transaction processing
-- Automated alerts
+### Core Endpoints
 
-## Tech Stack
+#### Dashboard Overview
+- `GET /api/v1/dashboard/overview`
+  - Returns system-wide metrics
+  - Includes sales, customer stats, alerts
 
-- Backend: FastAPI + PostgreSQL
-- Infrastructure: Docker + Docker Compose
-- Database ORM: SQLAlchemy
-- Development: Hot Reload enabled
+#### Transactions
+- `POST /api/v1/transactions/`
+  - Create new transaction
+  - Includes fraud detection
+- `GET /api/v1/transactions/suspicious`
+  - List suspicious transactions
+- `GET /api/v1/transactions/recent`
+  - List recent transactions
 
-## Development Notes
+#### Customers
+- `GET /api/v1/customers/`
+  - List customers with pagination
+- `GET /api/v1/customers/{customer_id}`
+  - Get customer details
+- `GET /api/v1/customers/behavior`
+  - Get customer behavior analytics
 
-- API automatically handles data validation
-- Real-time fraud detection is active
-- Comprehensive error handling implemented
-- Database migrations handled automatically
-- API documentation auto-generated
+#### Alerts
+- `GET /api/v1/alerts/`
+  - Get system alerts
+- `GET /api/v1/alerts/status`
+  - Get system status
 
-## Monitoring
+## Database Schema
 
-Access metrics and health checks:
-- Health: `http://localhost:8000/health`
-- Metrics: `http://localhost:8000/metrics` 
+### Core Tables
+
+#### Transaction
+```sql
+CREATE TABLE transaction (
+    id SERIAL PRIMARY KEY,
+    customer_id INTEGER REFERENCES customer(id),
+    product_id INTEGER REFERENCES product(id),
+    quantity INTEGER,
+    price FLOAT,
+    status VARCHAR,
+    payment_method VARCHAR,
+    timestamp TIMESTAMP
+);
+```
+
+#### Customer
+```sql
+CREATE TABLE customer (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR UNIQUE,
+    total_spent FLOAT,
+    risk_score FLOAT,
+    registration_date TIMESTAMP
+);
+```
+
+#### Alert
+```sql
+CREATE TABLE alert (
+    id SERIAL PRIMARY KEY,
+    type VARCHAR,
+    message TEXT,
+    severity VARCHAR,
+    alert_metadata JSONB,
+    created_at TIMESTAMP,
+    resolved_at TIMESTAMP
+);
+```
+
+## Fraud Detection System
+
+The system uses multiple criteria to detect suspicious transactions:
+
+1. **Transaction Velocity**
+   - Monitors frequency of transactions
+   - Configurable time window
+   - Threshold-based alerting
+
+2. **Amount Anomaly**
+   - Statistical analysis of transaction amounts
+   - Z-score calculation
+   - Customer-specific thresholds
+
+3. **Risk Scoring**
+   - Cumulative risk assessment
+   - Multiple factor consideration
+   - Real-time score updates
+
+## Testing
+
+Run the test suite:
+```bash
+pytest
+```
+
+Run with coverage:
+```bash
+pytest --cov=app tests/
+```
+
+## Maintenance
+
+### Database Management
+
+Recalculate customer totals:
+```bash
+python scripts/recalculate_totals.py
+```
+
+### Monitoring
+
+The application exposes metrics at:
+- Health check: `/health`
+- Metrics: `/metrics`
+
+## Deployment
+
+### Production Considerations
+
+1. Set appropriate environment variables
+2. Configure proper database indexes
+3. Set up monitoring and logging
+4. Configure proper security measures
+5. Set up backup procedures
+
+### Environment Variables
+
+Required environment variables:
+```
+DATABASE_URL=postgresql://user:password@localhost/dbname
+REDIS_URL=redis://localhost
+SECRET_KEY=your-secret-key
+ENVIRONMENT=production
+``` 

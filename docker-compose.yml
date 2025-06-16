@@ -1,6 +1,19 @@
 version: '3.8'
 
 services:
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     - REACT_APP_API_URL=/api/v1
+  #   depends_on:
+  #     - backend
+  #   networks:
+  #     - techmart_network
+
   backend:
     build:
       context: ./backend
@@ -13,7 +26,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/techmart
       - SECRET_KEY=your-secret-key-here
-      - CORS_ORIGINS=http://localhost:3000
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:80,http://localhost
     depends_on:
       - db
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload

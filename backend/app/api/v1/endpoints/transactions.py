@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import List, Optional, Dict
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field, validator
@@ -11,6 +11,8 @@ from app.models.product import Product
 from app.models.customer import Customer
 from app.utils.analytics import detect_suspicious_transactions
 from app.core.exceptions import ResourceNotFound, ValidationError, BusinessLogicError
+from app.services.fraud_detection import FraudDetectionService
+from app.models.alert import Alert, AlertType
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -44,6 +46,7 @@ class TransactionResponse(BaseModel):
     status: TransactionStatus
     timestamp: datetime
     total_amount: float
+    fraud_check_result: Optional[Dict] = None
     
     class Config:
         from_attributes = True
@@ -53,7 +56,7 @@ async def create_transaction(
     transaction: TransactionCreate,
     db: Session = Depends(get_db)
 ):
-    """Create a new transaction."""
+    """Create a new transaction with fraud detection."""
     # Validate customer exists
     customer = db.query(Customer).filter(Customer.id == transaction.customer_id).first()
     if not customer:
@@ -70,6 +73,30 @@ async def create_transaction(
         )
 
     try:
+        # Check for potential fraud
+        fraud_service = FraudDetectionService(db)
+        fraud_check = fraud_service.analyze_transaction(
+            customer_id=transaction.customer_id,
+            amount=transaction.price * transaction.quantity
+        )
+
+        # Create transaction with initial status based on fraud check
+        initial_status = TransactionStatus.PENDING
+        if fraud_check["is_suspicious"]:
+            initial_status = TransactionStatus.FLAGGED
+            # Create alert for suspicious transaction
+            alert = Alert(
+                type=AlertType.SUSPICIOUS_TRANSACTION,
+                message=f"Suspicious transaction detected: {', '.join(fraud_check['reasons'])}",
+                severity="warning",
+                alert_metadata={
+                    "customer_id": transaction.customer_id,
+                    "amount": transaction.price * transaction.quantity,
+                    "fraud_check": fraud_check
+                }
+            )
+            db.add(alert)
+
         # Create transaction
         db_transaction = Transaction(
             customer_id=transaction.customer_id,
@@ -77,9 +104,12 @@ async def create_transaction(
             quantity=transaction.quantity,
             price=transaction.price,
             payment_method=transaction.payment_method,
-            status=TransactionStatus.PENDING,
+            status=initial_status,
             timestamp=datetime.utcnow()
         )
+        
+        # Set fraud check result using property
+        db_transaction.fraud_check_result = fraud_check
         
         # Update product stock
         product.stock_quantity -= transaction.quantity
@@ -88,11 +118,20 @@ async def create_transaction(
         db.commit()
         db.refresh(db_transaction)
         
-        logger.info(
-            f"Transaction created: ID={db_transaction.id}, "
-            f"Amount=${db_transaction.total_amount:.2f}, "
-            f"Customer={customer.id}"
-        )
+        # Log appropriate message based on fraud check
+        if fraud_check["is_suspicious"]:
+            logger.warning(
+                f"Suspicious transaction created: ID={db_transaction.id}, "
+                f"Amount=${db_transaction.total_amount:.2f}, "
+                f"Customer={customer.id}, "
+                f"Reasons={fraud_check['reasons']}"
+            )
+        else:
+            logger.info(
+                f"Transaction created: ID={db_transaction.id}, "
+                f"Amount=${db_transaction.total_amount:.2f}, "
+                f"Customer={customer.id}"
+            )
         
         return db_transaction
     
