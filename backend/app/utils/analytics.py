@@ -11,18 +11,27 @@ def get_total_sales(db: Session, time_window: timedelta = None) -> float:
     """Get total sales amount within the specified time window."""
     query = db.query(func.sum(Transaction.price * Transaction.quantity))
     if time_window:
-        cutoff = datetime.now(UTC) - time_window
-        query = query.filter(Transaction.timestamp >= cutoff)
+        # Get latest transaction timestamp
+        latest_transaction = db.query(func.max(Transaction.timestamp)).scalar()
+        if latest_transaction:
+            cutoff = latest_transaction - time_window
+            query = query.filter(Transaction.timestamp >= cutoff)
     return float(query.scalar() or 0.0)
 
 def get_sales_by_hour(db: Session, hours: int = 24) -> List[Dict]:
     """Get hourly sales data for the last n hours."""
-    cutoff = datetime.now(UTC) - timedelta(hours=hours)
+    # First get the latest transaction timestamp
+    latest_transaction = db.query(func.max(Transaction.timestamp)).scalar()
+    if not latest_transaction:
+        return []
+    
+    # Use the latest transaction as reference point
+    end = latest_transaction.replace(minute=0, second=0, microsecond=0)
+    cutoff = end - timedelta(hours=hours)
     
     # Generate all hours in the range
     all_hours = []
-    current = cutoff.replace(minute=0, second=0, microsecond=0)
-    end = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
+    current = cutoff
     
     while current <= end:
         all_hours.append(current)
@@ -47,7 +56,35 @@ def get_sales_by_hour(db: Session, hours: int = 24) -> List[Dict]:
         for hour, total_sales, num_transactions in hourly_sales
     }
     
-    # Fill in all hours with data or zeros
+    # For longer time ranges, aggregate data to reduce points
+    if hours > 24 * 7:  # For ranges longer than a week
+        # Aggregate by day instead of hour
+        aggregated_hours = []
+        daily_data = {}
+        
+        for hour in all_hours:
+            day = hour.replace(hour=0)
+            if day not in daily_data:
+                daily_data[day] = {
+                    'total_sales': 0.0,
+                    'num_transactions': 0
+                }
+            
+            if hour in sales_dict:
+                daily_data[day]['total_sales'] += sales_dict[hour]['total_sales']
+                daily_data[day]['num_transactions'] += sales_dict[hour]['num_transactions']
+        
+        # Convert daily data to list
+        return [
+            {
+                'hour': day.isoformat(),
+                'total_sales': data['total_sales'],
+                'num_transactions': data['num_transactions']
+            }
+            for day, data in sorted(daily_data.items())
+        ]
+    
+    # For shorter ranges, return hourly data
     return [
         {
             'hour': hour.isoformat(),
@@ -76,7 +113,12 @@ def get_low_stock_products(db: Session, threshold: int = 10) -> List[Dict]:
 
 def detect_suspicious_transactions(db: Session, time_window: timedelta = timedelta(hours=24)) -> List[Dict]:
     """Detect suspicious transactions based on various criteria."""
-    cutoff = datetime.now(UTC) - time_window
+    # Get latest transaction timestamp
+    latest_transaction = db.query(func.max(Transaction.timestamp)).scalar()
+    if not latest_transaction:
+        return []
+    
+    cutoff = latest_transaction - time_window
     
     # Get average transaction amount
     avg_amount = db.query(func.avg(Transaction.price * Transaction.quantity)).scalar() or 0
@@ -117,7 +159,17 @@ def get_customer_metrics(db: Session) -> Dict:
 
 def get_transaction_metrics(db: Session, time_window: timedelta = timedelta(hours=24)) -> Dict:
     """Get various transaction-related metrics."""
-    cutoff = datetime.now(UTC) - time_window
+    # Get latest transaction timestamp
+    latest_transaction = db.query(func.max(Transaction.timestamp)).scalar()
+    if not latest_transaction:
+        return {
+            'transaction_count': 0,
+            'total_amount': 0.0,
+            'total_sales': 0.0,
+            'average_amount': 0.0
+        }
+    
+    cutoff = latest_transaction - time_window
     
     metrics = (
         db.query(

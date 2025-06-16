@@ -116,7 +116,14 @@ export const RevenueTrends: React.FC = () => {
   } as const;
 
   return (
-    <Box sx={{ width: '100%', height: '100%', minHeight: 400 }}>
+    <Box sx={{ 
+      width: '100%', 
+      height: 400, 
+      position: 'relative',
+      '& > canvas': {
+        maxHeight: '400px !important'
+      }
+    }}>
       {!isLoading && <Line data={chartData} options={options} />}
     </Box>
   );

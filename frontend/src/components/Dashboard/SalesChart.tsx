@@ -1,5 +1,15 @@
-import React from 'react';
-import { Box, useTheme } from '@mui/material';
+import React, { useState } from 'react';
+import { 
+  Box, 
+  useTheme, 
+  FormControl, 
+  Select, 
+  MenuItem, 
+  Typography,
+  Stack,
+  SelectChangeEvent,
+  NoSsr 
+} from '@mui/material';
 import { Line } from 'react-chartjs-2';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../../utils/api';
@@ -32,7 +42,7 @@ ChartJS.register(
 
 interface DashboardMetrics {
   sales: {
-    total_24h: number;
+    total: number;
     total_lifetime: number;
     hourly_breakdown: Array<{
       hour: string;
@@ -68,17 +78,44 @@ interface DashboardMetrics {
   };
 }
 
+type TimeRange = '24h' | '7d' | '30d' | '90d';
+
+const timeRangeOptions = [
+  { value: '24h', label: 'Last 24 Hours' },
+  { value: '7d', label: 'Last 7 Days' },
+  { value: '30d', label: 'Last 30 Days' },
+  { value: '90d', label: 'Last 90 Days' },
+];
+
 export const SalesChart: React.FC = () => {
   const theme = useTheme();
+  const [timeRange, setTimeRange] = useState<TimeRange>('24h');
 
-  const { data: metrics } = useQuery<DashboardMetrics>({
-    queryKey: ['dashboardMetrics'],
+  const { data: metrics, isLoading, error } = useQuery<DashboardMetrics>({
+    queryKey: ['dashboardMetrics', timeRange],
     queryFn: async () => {
-      const response = await apiClient.get('/dashboard/overview');
+      const response = await apiClient.get('/dashboard/overview', {
+        params: { time_range: timeRange }
+      });
       return response.data;
     },
     refetchInterval: 30000,
   });
+
+  const handleTimeRangeChange = (event: SelectChangeEvent<TimeRange>) => {
+    setTimeRange(event.target.value as TimeRange);
+  };
+
+  const formatLabel = (timestamp: string) => {
+    const date = parseISO(timestamp);
+    if (timeRange === '24h') {
+      return format(date, 'HH:mm');
+    } else if (timeRange === '7d') {
+      return format(date, 'EEE HH:mm');
+    } else {
+      return format(date, 'MMM d');
+    }
+  };
 
   // Calculate moving averages for smoother lines
   const calculateMovingAverage = (data: number[], windowSize: number) => {
@@ -93,12 +130,13 @@ export const SalesChart: React.FC = () => {
   const rawSales = hourlyData.map(item => item.total_sales);
   const rawTransactions = hourlyData.map(item => item.num_transactions);
   
-  // Use 3-hour moving average for smoother lines
-  const smoothedSales = calculateMovingAverage(rawSales, 3);
-  const smoothedTransactions = calculateMovingAverage(rawTransactions, 3);
+  // Use moving average for smoother lines, adjust window size based on time range
+  const movingAverageWindow = timeRange === '24h' ? 3 : timeRange === '7d' ? 6 : 12;
+  const smoothedSales = calculateMovingAverage(rawSales, movingAverageWindow);
+  const smoothedTransactions = calculateMovingAverage(rawTransactions, movingAverageWindow);
 
   const chartData: ChartData<'line'> = {
-    labels: hourlyData.map(item => format(parseISO(item.hour), 'HH:mm')),
+    labels: hourlyData.map(item => formatLabel(item.hour)),
     datasets: [
       {
         label: 'Sales ($)',
@@ -108,7 +146,7 @@ export const SalesChart: React.FC = () => {
         fill: true,
         tension: 0.4,
         yAxisID: 'y',
-        pointRadius: 2,
+        pointRadius: timeRange === '24h' ? 2 : 1,
         borderWidth: 2,
       },
       {
@@ -119,7 +157,7 @@ export const SalesChart: React.FC = () => {
         fill: true,
         tension: 0.4,
         yAxisID: 'transactions',
-        pointRadius: 2,
+        pointRadius: timeRange === '24h' ? 2 : 1,
         borderWidth: 2,
       },
     ],
@@ -138,6 +176,7 @@ export const SalesChart: React.FC = () => {
         labels: {
           boxWidth: 12,
           usePointStyle: true,
+          color: theme.palette.text.primary,
         },
       },
       tooltip: {
@@ -166,9 +205,10 @@ export const SalesChart: React.FC = () => {
           display: false,
         },
         ticks: {
-          maxRotation: 0,
+          maxRotation: 45,
+          color: theme.palette.text.secondary,
           autoSkip: true,
-          maxTicksLimit: 12,
+          maxTicksLimit: timeRange === '24h' ? 12 : timeRange === '7d' ? 14 : 10,
         },
       },
       y: {
@@ -182,6 +222,7 @@ export const SalesChart: React.FC = () => {
         ticks: {
           callback: (value) => formatCurrency(value as number),
           maxTicksLimit: 8,
+          color: theme.palette.text.secondary,
         },
       },
       transactions: {
@@ -194,6 +235,7 @@ export const SalesChart: React.FC = () => {
         },
         ticks: {
           maxTicksLimit: 8,
+          color: theme.palette.text.secondary,
         },
       },
     },
@@ -201,7 +243,67 @@ export const SalesChart: React.FC = () => {
 
   return (
     <Box sx={{ height: 400, position: 'relative' }}>
-      <Line data={chartData} options={options} />
+      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+        <FormControl size="small" sx={{ minWidth: 150 }}>
+          <Select
+            value={timeRange}
+            onChange={handleTimeRangeChange}
+            variant="outlined"
+            sx={{
+              '& .MuiSelect-select': {
+                py: 1,
+              },
+            }}
+          >
+            {timeRangeOptions.map(option => (
+              <MenuItem key={option.value} value={option.value}>
+                {option.label}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+
+        {metrics?.sales?.total !== undefined && metrics.sales.total > 0 && (
+          <Typography variant="body2" color="text.secondary">
+            Total Sales: {formatCurrency(metrics.sales.total)}
+          </Typography>
+        )}
+      </Stack>
+      
+      <NoSsr>
+        {isLoading ? (
+          <Box sx={{ 
+            height: '100%', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center' 
+          }}>
+            <Typography color="text.secondary">Loading sales data...</Typography>
+          </Box>
+        ) : error ? (
+          <Box sx={{ 
+            height: '100%', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center' 
+          }}>
+            <Typography color="error">Error loading sales data</Typography>
+          </Box>
+        ) : hourlyData.length === 0 ? (
+          <Box sx={{ 
+            height: '100%', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center' 
+          }}>
+            <Typography color="text.secondary">
+              No sales data available for the selected time range
+            </Typography>
+          </Box>
+        ) : (
+          <Line data={chartData} options={options} />
+        )}
+      </NoSsr>
     </Box>
   );
 }; 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Typography } from '@mui/material';
+import { Box, Typography, Grid, Paper } from '@mui/material';
 import {
   Chart as ChartJS,
   ArcElement,
@@ -11,30 +11,61 @@ import { Doughnut } from 'react-chartjs-2';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../../utils/api';
 import { useTheme } from '@mui/material/styles';
+import { formatCurrency } from '../../utils/formatters';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
-interface CategoryData {
-  category: string;
-  sales: number;
+interface ProductPerformance {
+  top_products: Array<{
+    id: number;
+    name: string;
+    category: string;
+    units_sold: number;
+    revenue: number;
+    stock_quantity: number;
+  }>;
+  category_performance: {
+    [category: string]: {
+      total_revenue: number;
+      units_sold: number;
+      avg_turnover: number;
+    };
+  };
 }
+
+const MetricCard = ({ title, value, subtitle }: { title: string; value: string; subtitle?: string }) => (
+  <Box sx={{ textAlign: 'center', p: 1 }}>
+    <Typography variant="body2" color="text.secondary" gutterBottom>
+      {title}
+    </Typography>
+    <Typography variant="h6" sx={{ mb: 0.5 }}>
+      {value}
+    </Typography>
+    {subtitle && (
+      <Typography variant="caption" color="text.secondary">
+        {subtitle}
+      </Typography>
+    )}
+  </Box>
+);
 
 export const SalesByCategory: React.FC = () => {
   const theme = useTheme();
 
-  const { data: categoryData, isLoading } = useQuery<CategoryData[]>({
-    queryKey: ['salesByCategory'],
+  const { data, isLoading } = useQuery<ProductPerformance>({
+    queryKey: ['productPerformance'],
     queryFn: async () => {
-      const response = await apiClient.get('/analytics/sales-by-category');
+      const response = await apiClient.get('/analytics/product/performance');
       return response.data;
     },
+    refetchInterval: 60000, // Refresh every minute
   });
 
   const chartData: ChartData<'doughnut'> = {
-    labels: categoryData?.map(item => item.category) || [],
+    labels: data ? Object.keys(data.category_performance) : [],
     datasets: [
       {
-        data: categoryData?.map(item => item.sales) || [],
+        data: data ? Object.values(data.category_performance).map(cat => cat.total_revenue) : [],
         backgroundColor: [
           theme.palette.primary.main,
           theme.palette.secondary.main,
@@ -93,7 +124,7 @@ export const SalesByCategory: React.FC = () => {
             const value = context.raw;
             const total = context.dataset.data.reduce((acc: number, val: number) => acc + val, 0);
             const percentage = ((value / total) * 100).toFixed(1);
-            return `${context.label}: $${value.toLocaleString()} (${percentage}%)`;
+            return `${context.label}: ${formatCurrency(value)} (${percentage}%)`;
           },
         },
       },
@@ -109,8 +140,47 @@ export const SalesByCategory: React.FC = () => {
   }
 
   return (
-    <Box sx={{ height: 300, position: 'relative' }}>
-      <Doughnut data={chartData} options={options} />
+    <Box>
+      {/* Category Revenue Distribution Chart */}
+      <Box sx={{ height: 300, position: 'relative' }}>
+        <Doughnut data={chartData} options={options} />
+      </Box>
+
+      {/* Category Performance Metrics */}
+      {data && (
+        <Grid container spacing={2} sx={{ mt: 2 }}>
+          {Object.entries(data.category_performance).map(([category, metrics]) => (
+            <Grid item xs={12} key={category}>
+              <Paper sx={{ p: 2 }}>
+                <Typography variant="subtitle1" gutterBottom>
+                  {category}
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={4}>
+                    <MetricCard
+                      title="Revenue"
+                      value={formatCurrency(metrics.total_revenue)}
+                    />
+                  </Grid>
+                  <Grid item xs={4}>
+                    <MetricCard
+                      title="Units Sold"
+                      value={metrics.units_sold.toLocaleString()}
+                    />
+                  </Grid>
+                  <Grid item xs={4}>
+                    <MetricCard
+                      title="Avg Turnover"
+                      value={metrics.avg_turnover.toFixed(1)}
+                      subtitle="units per product"
+                    />
+                  </Grid>
+                </Grid>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+      )}
     </Box>
   );
 }; 

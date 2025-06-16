@@ -1,9 +1,10 @@
 import React from 'react';
 import { Box, Typography, Grid } from '@mui/material';
 import { Widget } from '../components/shared/Widget';
-import { RevenueTrends } from '../components/Analytics/RevenueTrends';
 import { KeyMetrics } from '../components/Analytics/KeyMetrics';
 import { SalesByCategory } from '../components/Analytics/SalesByCategory';
+import { CustomerBehavior } from '../components/Analytics/CustomerBehavior';
+import { GeographicAnalytics } from '../components/Analytics/GeographicAnalytics';
 
 export const Analytics: React.FC = () => {
   return (
@@ -15,14 +16,19 @@ export const Analytics: React.FC = () => {
         <Grid item xs={12}>
           <KeyMetrics />
         </Grid>
-        <Grid item xs={12} md={8}>
-          <Widget title="Revenue Trends">
-            <RevenueTrends />
-          </Widget>
-        </Grid>
-        <Grid item xs={12} md={4}>
+        <Grid item xs={12}>
           <Widget title="Sales by Category">
             <SalesByCategory />
+          </Widget>
+        </Grid>
+        <Grid item xs={12}>
+          <Widget title="Customer Behavior Analysis">
+            <CustomerBehavior />
+          </Widget>
+        </Grid>
+        <Grid item xs={12}>
+          <Widget title="Geographic Distribution">
+            <GeographicAnalytics />
           </Widget>
         </Grid>
       </Grid>

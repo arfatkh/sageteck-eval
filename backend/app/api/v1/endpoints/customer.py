@@ -2,12 +2,12 @@ from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, distinct
 import logging
 
 from app.db.session import get_db
 from app.models.customer import Customer
-from app.models.transaction import Transaction
+from app.models.transaction import Transaction, TransactionStatus
 from app.core.exceptions import ResourceNotFound
 
 router = APIRouter()
@@ -15,9 +15,9 @@ logger = logging.getLogger(__name__)
 
 @router.get("/", response_model=Dict[str, Any])
 async def get_customers(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, gt=0, le=100),
     search: Optional[str] = Query(None, min_length=1),
+    page: int = Query(1, gt=0),
+    page_size: int = Query(50, gt=0, le=100),
     db: Session = Depends(get_db)
 ):
     """Get paginated list of customers with optional search."""
@@ -35,11 +35,15 @@ async def get_customers(
                 )
             )
         
-        # Get total count for pagination
+        # Get total count first
         total_count = query.count()
         
-        # Apply pagination and sorting
-        customers = query.order_by(Customer.id.asc()).offset(skip).limit(limit).all()
+        # Calculate pagination
+        total_pages = (total_count + page_size - 1) // page_size
+        offset = (page - 1) * page_size
+        
+        # Get paginated customers
+        customers = query.order_by(Customer.id.asc()).offset(offset).limit(page_size).all()
         
         result = {
             "items": [
@@ -53,12 +57,12 @@ async def get_customers(
                 for customer in customers
             ],
             "total": total_count,
-            "page": skip // limit + 1,
-            "pages": (total_count + limit - 1) // limit,
-            "has_more": (skip + limit) < total_count
+            "page": page,
+            "pages": total_pages,
+            "has_more": page < total_pages
         }
         
-        logger.info(f"Retrieved {len(customers)} customers, total: {total_count}, search: {search}")
+        logger.info(f"Retrieved {len(customers)} customers, page {page}/{total_pages}, search: {search}")
         return result
     except Exception as e:
         logger.error(f"Error retrieving customers: {str(e)}")
@@ -68,16 +72,26 @@ async def get_customers(
 async def get_customer_behavior(db: Session = Depends(get_db)):
     """Get customer behavior analytics including segments and purchase patterns."""
     try:
-        # Get total customers
-        total_customers = db.query(func.count(Customer.id)).scalar() or 0
+        # Get total customers using the same method as customer list
+        total_customers = db.query(Customer).count()
         
-        # Calculate purchase frequency distribution
+        # Get customers with completed transactions for other metrics
+        customers_with_transactions = (
+            db.query(Customer.id, func.sum(Transaction.price * Transaction.quantity).label('total_spent'))
+            .join(Transaction)
+            .filter(Transaction.status == TransactionStatus.COMPLETED)
+            .group_by(Customer.id)
+            .all()
+        )
+        
+        # Purchase frequency distribution (only completed transactions)
         customer_purchases = (
             db.query(
                 Customer.id,
                 func.count(Transaction.id).label('purchase_count')
             )
-            .outerjoin(Transaction)
+            .join(Transaction)
+            .filter(Transaction.status == TransactionStatus.COMPLETED)
             .group_by(Customer.id)
             .all()
         )
@@ -87,24 +101,26 @@ async def get_customer_behavior(db: Session = Depends(get_db)):
         two_to_five = sum(1 for c in customer_purchases if 2 <= c.purchase_count <= 5)
         six_plus = sum(1 for c in customer_purchases if c.purchase_count >= 6)
         
-        # Calculate average purchases
+        # Calculate average purchases (based on customers with transactions)
         total_purchases = sum(c.purchase_count for c in customer_purchases)
-        avg_purchases = round(total_purchases / total_customers if total_customers > 0 else 0, 2)
+        customers_with_purchases = len(customer_purchases)
+        avg_purchases = round(total_purchases / customers_with_purchases if customers_with_purchases > 0 else 0, 2)
         
-        # Calculate customer segments
-        customers = db.query(Customer).all()
-        high_value = sum(1 for c in customers if c.total_spent > 1000)
-        medium_value = sum(1 for c in customers if 500 <= c.total_spent <= 1000)
-        low_value = sum(1 for c in customers if c.total_spent < 500)
+        # Calculate customer segments based on total_spent
+        high_value = sum(1 for c in customers_with_transactions if c.total_spent > 1000)
+        medium_value = sum(1 for c in customers_with_transactions if 500 <= c.total_spent <= 1000)
+        low_value = sum(1 for c in customers_with_transactions if c.total_spent < 500)
         
-        # Calculate retention metrics
+        # Calculate retention metrics (only completed transactions)
         thirty_days_ago = datetime.utcnow() - timedelta(days=30)
         active_customers = (
-            db.query(func.count(Customer.id))
+            db.query(func.count(distinct(Customer.id)))
             .join(Transaction)
-            .filter(Transaction.timestamp >= thirty_days_ago)
-            .group_by(Customer.id)
-            .count()
+            .filter(
+                Transaction.status == TransactionStatus.COMPLETED,
+                Transaction.timestamp >= thirty_days_ago
+            )
+            .scalar() or 0
         )
         retention_rate = round((active_customers / total_customers * 100) if total_customers > 0 else 0, 1)
         
@@ -129,7 +145,12 @@ async def get_customer_behavior(db: Session = Depends(get_db)):
             }
         }
         
-        logger.info("Retrieved customer behavior analytics")
+        logger.info(
+            f"Retrieved customer behavior: "
+            f"total_customers={total_customers}, "
+            f"active_customers={active_customers}, "
+            f"retention_rate={retention_rate}%"
+        )
         return result
     except Exception as e:
         logger.error(f"Error retrieving customer behavior: {str(e)}")
@@ -146,10 +167,13 @@ async def get_customer(
         if not customer:
             raise ResourceNotFound("Customer", customer_id)
             
-        # Get customer's recent transactions
+        # Get customer's recent completed transactions
         recent_transactions = (
             db.query(Transaction)
-            .filter(Transaction.customer_id == customer_id)
+            .filter(
+                Transaction.customer_id == customer_id,
+                Transaction.status == TransactionStatus.COMPLETED
+            )
             .order_by(Transaction.timestamp.desc())
             .limit(5)
             .all()

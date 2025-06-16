@@ -98,7 +98,7 @@ const ValueChange = styled(Typography)<{ trend: 'up' | 'down' | 'neutral' }>(({ 
 
 interface DashboardMetrics {
   sales: {
-    total_24h: number;
+    total: number;
     total_lifetime: number;
     hourly_breakdown: Array<{
       hour: string;
@@ -138,7 +138,9 @@ export const MetricsHeader: React.FC = () => {
   const { data: metrics, isLoading, isError } = useQuery<DashboardMetrics>({
     queryKey: ['dashboardMetrics'],
     queryFn: async () => {
-      const response = await apiClient.get('/dashboard/overview');
+      const response = await apiClient.get('/dashboard/overview', {
+        params: { time_range: '24h' }  // Always fetch 24h data for header metrics
+      });
       return response.data;
     },
     refetchInterval: 30000,
@@ -149,7 +151,7 @@ export const MetricsHeader: React.FC = () => {
     if (!metrics?.sales?.hourly_breakdown) return { value: 0, trend: 'neutral' as const };
     
     const last24Hours = metrics.sales.hourly_breakdown;
-    const totalSales = metrics.sales.total_24h;
+    const totalSales = metrics.sales.total;
     const avgHourlySales = totalSales / 24;
     
     // Compare with the average
@@ -163,7 +165,7 @@ export const MetricsHeader: React.FC = () => {
   const metricCards = [
     {
       title: '24h Sales',
-      value: formatCurrency(metrics?.sales?.total_24h || 0),
+      value: formatCurrency(metrics?.sales?.total || 0),
       change: calculate24hChange(metrics),
       icon: <TrendingUpIcon />,
       color: '#4CAF50',
@@ -266,7 +268,7 @@ export const MetricsHeader: React.FC = () => {
                     <Skeleton variant="text" width="80%" height={24} />
                   ) : (
                     <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                      {formatCurrency((metrics?.sales?.total_24h || 0) / 24)}
+                      {formatCurrency((metrics?.sales?.total || 0) / (metrics?.transactions?.transaction_count || 1))}
                     </Typography>
                   )}
                 </Box>
@@ -313,61 +315,49 @@ export const MetricsHeader: React.FC = () => {
           </Tooltip>
         </Grid>
 
-        {/* Right Column */}
+        {/* Right Column - Active Customers */}
         <Grid item xs={12} md={3} sx={{ height: '100%' }}>
-          <Grid container spacing={2} sx={{ height: '100%' }}>
-            <Grid item xs={12} sx={{ height: '50%' }}>
-              <Tooltip title={metricCards[2].tooltip} arrow>
-                <MetricCard>
-                  <IconWrapper sx={{ bgcolor: `${metricCards[2].color}15` }}>
-                    <Box sx={{ color: metricCards[2].color }}>{metricCards[2].icon}</Box>
-                  </IconWrapper>
-                  <Box sx={{ flex: 1, overflow: 'hidden' }}>
-                    <Typography variant="body2" color="text.secondary" noWrap>
-                      {metricCards[2].title}
-                    </Typography>
-                    {isLoading ? (
-                      <Skeleton variant="text" width="80%" height={24} />
-                    ) : (
-                      <>
-                        <Typography variant="h6" component="div" sx={{ fontWeight: 600 }}>
-                          {metricCards[2].value}
-                        </Typography>
-                        {metricCards[2].secondaryMetric && (
-                          <Typography variant="caption" color="text.secondary">
-                            {metricCards[2].secondaryMetric}
-                          </Typography>
-                        )}
-                      </>
-                    )}
-                  </Box>
-                </MetricCard>
-              </Tooltip>
-            </Grid>
-            <Grid item xs={12} sx={{ height: '50%' }}>
-              <MetricCard sx={{
-                background: (theme) => `linear-gradient(135deg, ${alpha(theme.palette.success.dark, 0.15)} 0%, ${alpha(theme.palette.background.paper, 0.9)} 100%)`
+          <Tooltip title={metricCards[2].tooltip} arrow>
+            <MetricCard sx={{
+              height: '100%',
+              background: (theme) => `linear-gradient(135deg, ${alpha(theme.palette.info.dark, 0.15)} 0%, ${alpha(theme.palette.background.paper, 0.9)} 100%)`,
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              alignItems: 'center',
+              textAlign: 'center'
+            }}>
+              <IconWrapper sx={{ 
+                width: 64,
+                height: 64,
+                marginRight: 0,
+                marginBottom: 2,
+                bgcolor: `${metricCards[2].color}15`,
+                '& svg': { fontSize: 32 }
               }}>
-                <IconWrapper sx={{ bgcolor: (theme) => alpha(theme.palette.success.main, 0.15) }}>
-                  <Box sx={{ color: 'success.main' }}>
-                    <TrendingUpIcon />
-                  </Box>
-                </IconWrapper>
-                <Box sx={{ flex: 1 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Conversion Rate
-                  </Typography>
-                  {isLoading ? (
-                    <Skeleton variant="text" width="80%" height={24} />
-                  ) : (
-                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                      {((metrics?.transactions?.transaction_count || 0) / (metrics?.customers?.total_customers || 1) * 100).toFixed(1)}%
+                <Box sx={{ color: metricCards[2].color }}>{metricCards[2].icon}</Box>
+              </IconWrapper>
+              <Box>
+                <Typography variant="h5" color="text.secondary" gutterBottom>
+                  {metricCards[2].title}
+                </Typography>
+                {isLoading ? (
+                  <Skeleton variant="text" width="160px" height={48} />
+                ) : (
+                  <>
+                    <Typography variant="h3" component="div" sx={{ fontWeight: 700 }}>
+                      {metricCards[2].value}
                     </Typography>
-                  )}
-                </Box>
-              </MetricCard>
-            </Grid>
-          </Grid>
+                    {metricCards[2].secondaryMetric && (
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                        {metricCards[2].secondaryMetric}
+                      </Typography>
+                    )}
+                  </>
+                )}
+              </Box>
+            </MetricCard>
+          </Tooltip>
         </Grid>
       </Grid>
     </Box>

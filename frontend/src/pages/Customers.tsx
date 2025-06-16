@@ -12,13 +12,7 @@ import {
   useTheme,
   alpha
 } from '@mui/material';
-import { 
-  DataGrid, 
-  GridColDef, 
-  GridRenderCellParams,
-  GridValueFormatterParams,
-  GridRowParams 
-} from '@mui/x-data-grid';
+import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { useQuery } from '@tanstack/react-query';
 import { 
   Search as SearchIcon,
@@ -46,14 +40,6 @@ interface PieChartEntry {
   description: string;
 }
 
-interface CustomerResponse {
-  items: Customer[];
-  total: number;
-  page: number;
-  pages: number;
-  has_more: boolean;
-}
-
 interface CustomerBehavior {
   purchase_frequency: {
     average_purchases: number;
@@ -75,6 +61,14 @@ interface CustomerBehavior {
   };
 }
 
+interface PaginatedCustomers {
+  items: Customer[];
+  total: number;
+  page: number;
+  pages: number;
+  has_more: boolean;
+}
+
 const columns: GridColDef[] = [
   { field: 'id', headerName: 'ID', width: 90 },
   { field: 'email', headerName: 'Email', width: 250, flex: 1 },
@@ -82,20 +76,20 @@ const columns: GridColDef[] = [
     field: 'registration_date',
     headerName: 'Registration Date',
     width: 180,
-    valueFormatter: (params: GridValueFormatterParams) => formatDate(params.value as string),
+    valueFormatter: (params) => formatDate(params.value),
   },
   {
     field: 'total_spent',
     headerName: 'Total Spent',
     width: 150,
-    valueFormatter: (params: GridValueFormatterParams) => formatCurrency(params.value as number),
+    valueFormatter: (params) => formatCurrency(params.value),
     cellClassName: 'font-tabular-nums',
   },
   {
     field: 'risk_score',
     headerName: 'Risk Score',
     width: 150,
-    renderCell: (params: GridRenderCellParams<Customer>) => {
+    renderCell: (params) => {
       const score = params.value as number;
       const color = score >= 0.7 ? 'error' : score >= 0.4 ? 'warning' : 'success';
       return (
@@ -111,7 +105,7 @@ const columns: GridColDef[] = [
   },
 ];
 
-const StyledMetricPaper = ({ children, ...props }: { children: React.ReactNode; sx?: any }) => (
+const StyledMetricPaper = ({ children, ...props }: any) => (
   <Paper
     {...props}
     sx={{
@@ -136,31 +130,18 @@ export const Customers: React.FC = () => {
   const theme = useTheme();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
-  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
-  const [paginationModel, setPaginationModel] = useState({
-    pageSize: 50,
-    page: 0,
-  });
-  
-  // Debounce search term to avoid too many API calls
-  const debouncedSearchTerm = React.useDeferredValue(searchTerm);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
 
-  const { data: customersData, isLoading: isLoadingCustomers } = useQuery<CustomerResponse>({
-    queryKey: ['customers', paginationModel.page, paginationModel.pageSize, debouncedSearchTerm],
+  const { data: customersData, isLoading: isLoadingCustomers } = useQuery<PaginatedCustomers>({
+    queryKey: ['customers', page, pageSize, searchTerm],
     queryFn: async () => {
-      const searchParams = new URLSearchParams({
-        skip: (paginationModel.page * paginationModel.pageSize).toString(),
-        limit: paginationModel.pageSize.toString(),
+      const params = new URLSearchParams({
+        page: (page + 1).toString(), // DataGrid uses 0-based pages, API uses 1-based
+        page_size: pageSize.toString(),
+        ...(searchTerm && { search: searchTerm })
       });
-      
-      if (debouncedSearchTerm) {
-        searchParams.append('search', debouncedSearchTerm);
-      }
-      
-      const response = await fetch(`/api/v1/customers?${searchParams.toString()}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch customers');
-      }
+      const response = await fetch(`/api/v1/customers?${params}`);
       return response.json();
     },
   });
@@ -168,21 +149,12 @@ export const Customers: React.FC = () => {
   const { data: behavior, isLoading: isLoadingBehavior } = useQuery<CustomerBehavior>({
     queryKey: ['customerBehavior'],
     queryFn: async () => {
-      const response = await fetch('/api/v1/customers/behavior');
-      if (!response.ok) {
-        throw new Error('Failed to fetch customer behavior');
-      }
+      const response = await fetch('/api/v1/analytics/customer/behavior');
       return response.json();
     },
   });
 
-  // Calculate metrics
   const retentionRate = behavior?.retention_metrics.retention_rate ?? 0;
-  const activeCustomerRate = behavior ? (behavior.retention_metrics.retained_customers / behavior.retention_metrics.total_customers * 100) : 0;
-  const avgOrderValue = behavior && behavior.retention_metrics.total_customers > 0 
-    ? (behavior.customer_segments.high_value * 1500 + behavior.customer_segments.medium_value * 750 + behavior.customer_segments.low_value * 250) / behavior.retention_metrics.total_customers 
-    : 0;
-
   const segmentData: PieChartEntry[] = behavior ? [
     { 
       name: 'High Value', 
@@ -203,6 +175,10 @@ export const Customers: React.FC = () => {
       description: '< $500 spent'
     },
   ] : [];
+
+  const filteredCustomers = React.useMemo(() => {
+    return customersData?.items || [];
+  }, [customersData]);
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
@@ -231,11 +207,6 @@ export const Customers: React.FC = () => {
       );
     }
     return null;
-  };
-
-  const handleRowClick = (params: GridRowParams<Customer>) => {
-    setSelectedCustomerId(params.row.id);
-    setIsDetailsDialogOpen(true);
   };
 
   return (
@@ -273,10 +244,10 @@ export const Customers: React.FC = () => {
                   Total Customers
                 </Typography>
                 <Typography variant="h4">
-                  {isLoadingBehavior ? (
+                  {isLoadingCustomers ? (
                     <CircularProgress size={20} />
                   ) : (
-                    behavior?.retention_metrics.total_customers.toLocaleString()
+                    customersData?.total.toLocaleString()
                   )}
                 </Typography>
               </StyledMetricPaper>
@@ -329,32 +300,27 @@ export const Customers: React.FC = () => {
                 </Box>
               ) : (
                 <DataGrid
-                  rows={customersData?.items ?? []}
+                  rows={filteredCustomers}
                   columns={columns}
-                  rowCount={customersData?.total ?? 0}
-                  pageSizeOptions={[25, 50, 100]}
-                  paginationModel={paginationModel}
-                  paginationMode="server"
-                  onPaginationModelChange={setPaginationModel}
-                  disableRowSelectionOnClick
-                  onRowClick={handleRowClick}
-                  filterMode="server"
-                  loading={isLoadingCustomers}
-                  initialState={{
-                    pagination: {
-                      paginationModel: {
-                        pageSize: 50,
-                      },
-                    },
+                  paginationModel={{
+                    page,
+                    pageSize,
                   }}
+                  onPaginationModelChange={(model) => {
+                    setPage(model.page);
+                    setPageSize(model.pageSize);
+                  }}
+                  pageSizeOptions={[10, 25, 50]}
+                  rowCount={customersData?.total || 0}
+                  paginationMode="server"
+                  loading={isLoadingCustomers}
+                  disableRowSelectionOnClick
+                  onRowClick={(params) => setSelectedCustomerId(params.row.id)}
                   sx={{
                     border: 'none',
                     '& .MuiDataGrid-cell': {
                       borderColor: 'divider',
                       cursor: 'pointer',
-                    },
-                    '& .MuiDataGrid-row:hover': {
-                      bgcolor: (theme) => alpha(theme.palette.primary.main, 0.04),
                     },
                     '& .MuiDataGrid-columnHeaders': {
                       bgcolor: 'background.paper',
@@ -470,8 +436,8 @@ export const Customers: React.FC = () => {
       </Grid>
 
       <CustomerDetailsDialog
-        open={isDetailsDialogOpen}
-        onClose={() => setIsDetailsDialogOpen(false)}
+        open={!!selectedCustomerId}
+        onClose={() => setSelectedCustomerId(null)}
         customerId={selectedCustomerId}
       />
     </Box>

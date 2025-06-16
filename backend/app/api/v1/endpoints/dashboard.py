@@ -1,5 +1,5 @@
 from datetime import timedelta
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 import logging
 
@@ -18,33 +18,46 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 @router.get("/overview")
-async def get_dashboard_overview(db: Session = Depends(get_db)):
+async def get_dashboard_overview(
+    time_range: str = Query('24h', regex='^(24h|7d|30d|90d)$'),
+    db: Session = Depends(get_db)
+):
     """
     Get comprehensive dashboard overview including:
-    - Sales metrics (24h and lifetime)
+    - Sales metrics for the specified time range
     - Customer metrics
     - Transaction metrics
     - Low stock alerts
     - Suspicious transactions
     """
     try:
-        # Time windows
-        day_window = timedelta(days=1)
+        # Convert time range to timedelta
+        time_windows = {
+            '24h': timedelta(days=1),
+            '7d': timedelta(days=7),
+            '30d': timedelta(days=30),
+            '90d': timedelta(days=90)
+        }
+        time_window = time_windows[time_range]
         
         # Gather all metrics
-        total_sales_24h = get_total_sales(db, day_window)
+        total_sales = get_total_sales(db, time_window)
         total_sales_lifetime = get_total_sales(db)  # No time window for lifetime
-        hourly_sales = get_sales_by_hour(db, 24)
+        
+        # Get hourly or daily breakdown based on time range
+        hours = 24 if time_range == '24h' else time_window.days * 24
+        sales_breakdown = get_sales_by_hour(db, hours)
+        
         customer_metrics = get_customer_metrics(db)
-        transaction_metrics = get_transaction_metrics(db, day_window)
+        transaction_metrics = get_transaction_metrics(db, time_window)
         low_stock = get_low_stock_products(db, threshold=10)
-        suspicious = detect_suspicious_transactions(db, day_window)
+        suspicious = detect_suspicious_transactions(db, time_window)
         
         overview = {
             "sales": {
-                "total_24h": total_sales_24h,
+                "total": total_sales,
                 "total_lifetime": total_sales_lifetime,
-                "hourly_breakdown": hourly_sales
+                "hourly_breakdown": sales_breakdown
             },
             "customers": customer_metrics,
             "transactions": transaction_metrics,
@@ -56,8 +69,8 @@ async def get_dashboard_overview(db: Session = Depends(get_db)):
         
         # Log important metrics
         logger.info(
-            f"Dashboard overview: "
-            f"total_sales_24h=${total_sales_24h:.2f}, "
+            f"Dashboard overview: time_range={time_range}, "
+            f"total_sales=${total_sales:.2f}, "
             f"total_sales_lifetime=${total_sales_lifetime:.2f}, "
             f"low_stock_count={len(low_stock)}, "
             f"suspicious_transactions={len(suspicious)}"
@@ -67,7 +80,7 @@ async def get_dashboard_overview(db: Session = Depends(get_db)):
         if low_stock:
             logger.warning(f"Low stock alert: {len(low_stock)} products below threshold")
         if suspicious:
-            logger.warning(f"Suspicious transactions detected: {len(suspicious)} in last 24h")
+            logger.warning(f"Suspicious transactions detected: {len(suspicious)} in {time_range}")
         
         return overview
     

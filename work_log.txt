@@ -117,3 +117,21 @@ Current Focus:
 
 
 
+[2024-03-19] Fixed Customer Total Spent Calculation
+
+Issue:
+- Customer details view showed total_spent amount that didn't match the sum of their recent transactions
+- The total_spent field wasn't being automatically updated when transactions were created or updated
+
+Changes Made:
+1. Created SQLAlchemy event listeners in backend/app/models/events.py to:
+   - Update customer's total_spent when new transactions are created
+   - Update total_spent when transaction status changes
+   - Only include transactions with status "COMPLETED" in the total
+2. Added a management command (recalculate_totals.py) to fix existing data
+3. Ran the recalculation command to update all customer totals
+
+Result:
+- Customer total_spent now accurately reflects their completed transaction history
+- Total spent updates automatically with new transactions
+- System maintains consistency between transactions and customer totals 
