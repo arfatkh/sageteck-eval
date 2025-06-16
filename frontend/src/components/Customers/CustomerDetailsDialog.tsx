@@ -101,11 +101,14 @@ export const CustomerDetailsDialog: React.FC<CustomerDetailsDialogProps> = ({
 }) => {
   const theme = useTheme();
 
-  const { data: customer, isLoading } = useQuery<CustomerDetails>({
+  const { data: customer, isLoading, error } = useQuery<CustomerDetails>({
     queryKey: ['customerDetails', customerId],
     queryFn: async () => {
       if (!customerId) throw new Error('No customer ID');
       const response = await fetch(`/api/v1/customers/${customerId}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch customer details');
+      }
       return response.json();
     },
     enabled: !!customerId && open,
@@ -142,6 +145,15 @@ export const CustomerDetailsDialog: React.FC<CustomerDetailsDialogProps> = ({
         {isLoading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
             <CircularProgress />
+          </Box>
+        ) : error ? (
+          <Box sx={{ p: 3, textAlign: 'center' }}>
+            <Typography color="error" gutterBottom>
+              Error loading customer details
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {error instanceof Error ? error.message : 'Please try again later'}
+            </Typography>
           </Box>
         ) : customer ? (
           <Box sx={{ py: 1 }}>
@@ -257,11 +269,7 @@ export const CustomerDetailsDialog: React.FC<CustomerDetailsDialogProps> = ({
               </Paper>
             </Box>
           </Box>
-        ) : (
-          <Typography color="error" align="center">
-            Error loading customer details
-          </Typography>
-        )}
+        ) : null}
       </DialogContent>
     </Dialog>
   );

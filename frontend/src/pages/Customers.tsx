@@ -12,7 +12,13 @@ import {
   useTheme,
   alpha
 } from '@mui/material';
-import { DataGrid, GridColDef } from '@mui/x-data-grid';
+import { 
+  DataGrid, 
+  GridColDef, 
+  GridRenderCellParams,
+  GridValueFormatterParams,
+  GridRowParams 
+} from '@mui/x-data-grid';
 import { useQuery } from '@tanstack/react-query';
 import { 
   Search as SearchIcon,
@@ -40,6 +46,14 @@ interface PieChartEntry {
   description: string;
 }
 
+interface CustomerResponse {
+  items: Customer[];
+  total: number;
+  page: number;
+  pages: number;
+  has_more: boolean;
+}
+
 interface CustomerBehavior {
   purchase_frequency: {
     average_purchases: number;
@@ -61,14 +75,6 @@ interface CustomerBehavior {
   };
 }
 
-interface CustomerResponse {
-  items: Customer[];
-  total: number;
-  page: number;
-  pages: number;
-  has_more: boolean;
-}
-
 const columns: GridColDef[] = [
   { field: 'id', headerName: 'ID', width: 90 },
   { field: 'email', headerName: 'Email', width: 250, flex: 1 },
@@ -76,20 +82,20 @@ const columns: GridColDef[] = [
     field: 'registration_date',
     headerName: 'Registration Date',
     width: 180,
-    valueFormatter: (params) => formatDate(params.value),
+    valueFormatter: (params: GridValueFormatterParams) => formatDate(params.value as string),
   },
   {
     field: 'total_spent',
     headerName: 'Total Spent',
     width: 150,
-    valueFormatter: (params) => formatCurrency(params.value),
+    valueFormatter: (params: GridValueFormatterParams) => formatCurrency(params.value as number),
     cellClassName: 'font-tabular-nums',
   },
   {
     field: 'risk_score',
     headerName: 'Risk Score',
     width: 150,
-    renderCell: (params) => {
+    renderCell: (params: GridRenderCellParams<Customer>) => {
       const score = params.value as number;
       const color = score >= 0.7 ? 'error' : score >= 0.4 ? 'warning' : 'success';
       return (
@@ -105,7 +111,7 @@ const columns: GridColDef[] = [
   },
 ];
 
-const StyledMetricPaper = ({ children, ...props }: any) => (
+const StyledMetricPaper = ({ children, ...props }: { children: React.ReactNode; sx?: any }) => (
   <Paper
     {...props}
     sx={{
@@ -152,6 +158,9 @@ export const Customers: React.FC = () => {
       }
       
       const response = await fetch(`/api/v1/customers?${searchParams.toString()}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch customers');
+      }
       return response.json();
     },
   });
@@ -159,12 +168,21 @@ export const Customers: React.FC = () => {
   const { data: behavior, isLoading: isLoadingBehavior } = useQuery<CustomerBehavior>({
     queryKey: ['customerBehavior'],
     queryFn: async () => {
-      const response = await fetch('/api/v1/analytics/customer/behavior');
+      const response = await fetch('/api/v1/customers/behavior');
+      if (!response.ok) {
+        throw new Error('Failed to fetch customer behavior');
+      }
       return response.json();
     },
   });
 
+  // Calculate metrics
   const retentionRate = behavior?.retention_metrics.retention_rate ?? 0;
+  const activeCustomerRate = behavior ? (behavior.retention_metrics.retained_customers / behavior.retention_metrics.total_customers * 100) : 0;
+  const avgOrderValue = behavior && behavior.retention_metrics.total_customers > 0 
+    ? (behavior.customer_segments.high_value * 1500 + behavior.customer_segments.medium_value * 750 + behavior.customer_segments.low_value * 250) / behavior.retention_metrics.total_customers 
+    : 0;
+
   const segmentData: PieChartEntry[] = behavior ? [
     { 
       name: 'High Value', 
@@ -185,11 +203,6 @@ export const Customers: React.FC = () => {
       description: '< $500 spent'
     },
   ] : [];
-
-  const handleRowClick = (params: any) => {
-    setSelectedCustomerId(params.row.id);
-    setIsDetailsDialogOpen(true);
-  };
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
@@ -218,6 +231,11 @@ export const Customers: React.FC = () => {
       );
     }
     return null;
+  };
+
+  const handleRowClick = (params: GridRowParams<Customer>) => {
+    setSelectedCustomerId(params.row.id);
+    setIsDetailsDialogOpen(true);
   };
 
   return (
