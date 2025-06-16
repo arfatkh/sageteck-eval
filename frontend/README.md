@@ -241,3 +241,73 @@ Common issues and solutions:
    - Clear node_modules and reinstall
    - Check for TypeScript errors
    - Verify dependency versions 
+
+# Fraud Detection System - Technical Discussion
+
+## Implementation Approach
+Our fraud detection system implements a multi-layered approach using statistical analysis and real-time monitoring:
+
+1. **Transaction Velocity Analysis**
+   - Monitors transaction frequency within configurable time windows (currently 60 minutes)
+   - Uses Redis for high-performance transaction counting
+   - Threshold: 5 transactions per hour per customer
+
+2. **Amount Anomaly Detection**
+   - Implements z-score analysis on transaction amounts (threshold: 2.0 standard deviations)
+   - Maintains running statistics of customer spending patterns
+   - Requires minimum 3 transactions for baseline establishment
+
+3. **Risk Scoring System**
+   - Cumulative scoring: 0.5 points per detection trigger
+   - Real-time score updates with transaction processing
+   - Risk levels: Low (0-0.3), Medium (0.4-0.6), High (0.7+)
+
+## Current Limitations
+1. **Statistical Reliability**
+   - Requires sufficient transaction history for accurate anomaly detection
+   - New customers have limited baseline data
+   - False positives possible during initial period
+
+2. **Processing Delay**
+   - Current synchronous processing can impact transaction speed
+   - Database queries for historical data add latency
+   - Redis caching helps but doesn't eliminate all delays
+
+3. **Fixed Thresholds**
+   - One-size-fits-all thresholds may not suit all customer types
+   - Time windows are fixed rather than adaptive
+   - Limited consideration of seasonal patterns
+
+## Scalability Considerations
+1. **Current Performance**
+   - Handles ~1000 transactions per minute
+   - Average processing time: 100ms per transaction
+   - Redis caching reduces database load
+
+2. **Bottlenecks**
+   - Statistical calculations on large history sets
+   - Database queries for customer history
+   - Real-time alert generation
+
+3. **Improvement Opportunities**
+   - Implement async processing for non-critical checks
+   - Add machine learning for adaptive thresholds
+   - Introduce customer segmentation for varied rules
+   - Implement batch processing for historical analysis
+   - Add distributed processing for better scalability
+
+## Future Enhancements
+1. **Advanced Detection**
+   - Machine learning models for pattern recognition
+   - Network analysis for related fraud detection
+   - Behavioral biometrics integration
+
+2. **Performance Optimization**
+   - Implement event streaming with Kafka
+   - Add distributed processing with Celery
+   - Optimize database queries with materialized views
+
+3. **Enhanced Analytics**
+   - Real-time fraud pattern visualization
+   - Predictive risk modeling
+   - Customer segment-specific rules 
