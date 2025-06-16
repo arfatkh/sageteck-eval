@@ -29,6 +29,7 @@ services:
       - CORS_ORIGINS=http://localhost:3000,http://localhost:80,http://localhost
     depends_on:
       - db
+
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     networks:
       - techmart_network
@@ -51,9 +52,20 @@ services:
     networks:
       - techmart_network
 
+  # redis:
+  #   image: redis:7-alpine
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis_data:/data
+  #   command: redis-server --appendonly yes
+  #   networks:
+  #     - techmart_network
+
 networks:
   techmart_network:
 
 volumes:
   postgres_data:
+  # redis_data:
   

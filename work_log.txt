@@ -150,7 +150,9 @@ Result:
 
 Working on challenges : Fraud Detection System 
 
-Added Redis for Optization 
+Added Redis for Optization (Under Progress)
+
+
 
 
 NOTE: WORKING ON FRONDEND DOCEKERIZATION BUT STILL SOME ERRORS SO USE npm install for now
