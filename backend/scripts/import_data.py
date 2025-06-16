@@ -80,14 +80,40 @@ def import_transactions(csv_file: str):
         print(f"Missing headers in {os.path.basename(csv_file)}: {missing}")
         return
     
-    # Map CSV columns to model fields
-    column_mapping = {
-        'unit_price': 'price'  # Map unit_price from CSV to price in model
-    }
+    # Read CSV with pandas to handle timestamp conversion
+    df = pd.read_csv(csv_file)
     
+    # Convert timestamp to datetime with mixed format support
+    df['timestamp'] = pd.to_datetime(df['timestamp'], format='mixed')
+    
+    # Transform status and payment_method
+    df['status'] = df['status'].apply(transform_status)
+    df['payment_method'] = df['payment_method'].apply(transform_payment_method)
+    
+    # Keep only the columns we need and rename them
+    df = df.rename(columns={'unit_price': 'price'})
+    needed_columns = ['id', 'customer_id', 'product_id', 'quantity', 'price', 'status', 'payment_method', 'timestamp']
+    df = df[needed_columns]
+    
+    print(f"Importing {len(df)} transactions...")
+    print(f"Sample transaction: {df.iloc[0].to_dict()}")
+    
+    # Import to database
     with SessionLocal() as db:
-        processed, imported = import_csv_to_db(db, csv_file, Transaction, mapping=column_mapping)
-        print(f"Processed {processed} records, imported {imported} transactions")
+        try:
+            batch_size = 1000
+            for i in range(0, len(df), batch_size):
+                batch = df.iloc[i:i+batch_size]
+                for _, row in batch.iterrows():
+                    transaction = Transaction(**row.to_dict())
+                    db.add(transaction)
+                db.commit()
+                print(f"Imported {i+len(batch)} transactions...")
+            print(f"Successfully imported all {len(df)} transactions")
+        except Exception as e:
+            db.rollback()
+            print(f"Error importing transactions: {str(e)}")
+            raise
 
 def import_suppliers(csv_file: str):
     """Import suppliers from CSV file."""

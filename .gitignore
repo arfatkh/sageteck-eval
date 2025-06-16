@@ -62,3 +62,4 @@ coverage.xml
 data/
 tmp/
 temp/ 
+/frontend/node_modules

@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 from typing import Dict, List
@@ -11,13 +11,24 @@ def get_total_sales(db: Session, time_window: timedelta = None) -> float:
     """Get total sales amount within the specified time window."""
     query = db.query(func.sum(Transaction.price * Transaction.quantity))
     if time_window:
-        cutoff = datetime.utcnow() - time_window
+        cutoff = datetime.now(UTC) - time_window
         query = query.filter(Transaction.timestamp >= cutoff)
     return float(query.scalar() or 0.0)
 
 def get_sales_by_hour(db: Session, hours: int = 24) -> List[Dict]:
     """Get hourly sales data for the last n hours."""
-    cutoff = datetime.utcnow() - timedelta(hours=hours)
+    cutoff = datetime.now(UTC) - timedelta(hours=hours)
+    
+    # Generate all hours in the range
+    all_hours = []
+    current = cutoff.replace(minute=0, second=0, microsecond=0)
+    end = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
+    
+    while current <= end:
+        all_hours.append(current)
+        current += timedelta(hours=1)
+    
+    # Get actual sales data
     hourly_sales = (
         db.query(
             func.date_trunc('hour', Transaction.timestamp).label('hour'),
@@ -29,13 +40,21 @@ def get_sales_by_hour(db: Session, hours: int = 24) -> List[Dict]:
         .order_by(func.date_trunc('hour', Transaction.timestamp))
         .all()
     )
+    
+    # Convert to dictionary for easy lookup
+    sales_dict = {
+        hour: {'total_sales': float(total_sales or 0), 'num_transactions': num_transactions}
+        for hour, total_sales, num_transactions in hourly_sales
+    }
+    
+    # Fill in all hours with data or zeros
     return [
         {
             'hour': hour.isoformat(),
-            'total_sales': float(total_sales or 0),
-            'num_transactions': num_transactions
+            'total_sales': sales_dict.get(hour, {'total_sales': 0.0})['total_sales'],
+            'num_transactions': sales_dict.get(hour, {'num_transactions': 0})['num_transactions']
         }
-        for hour, total_sales, num_transactions in hourly_sales
+        for hour in all_hours
     ]
 
 def get_low_stock_products(db: Session, threshold: int = 10) -> List[Dict]:
@@ -57,7 +76,7 @@ def get_low_stock_products(db: Session, threshold: int = 10) -> List[Dict]:
 
 def detect_suspicious_transactions(db: Session, time_window: timedelta = timedelta(hours=24)) -> List[Dict]:
     """Detect suspicious transactions based on various criteria."""
-    cutoff = datetime.utcnow() - time_window
+    cutoff = datetime.now(UTC) - time_window
     
     # Get average transaction amount
     avg_amount = db.query(func.avg(Transaction.price * Transaction.quantity)).scalar() or 0
@@ -98,7 +117,7 @@ def get_customer_metrics(db: Session) -> Dict:
 
 def get_transaction_metrics(db: Session, time_window: timedelta = timedelta(hours=24)) -> Dict:
     """Get various transaction-related metrics."""
-    cutoff = datetime.utcnow() - time_window
+    cutoff = datetime.now(UTC) - time_window
     
     metrics = (
         db.query(
@@ -113,5 +132,6 @@ def get_transaction_metrics(db: Session, time_window: timedelta = timedelta(hour
     return {
         'transaction_count': metrics.total_count,
         'total_amount': float(metrics.total_amount or 0),
+        'total_sales': float(metrics.total_amount or 0),  # Adding total_sales field for compatibility
         'average_amount': float(metrics.avg_amount or 0)
     } 

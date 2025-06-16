@@ -116,6 +116,41 @@ async def get_suspicious_transactions(
         logger.error(f"Error detecting suspicious transactions: {str(e)}")
         raise
 
+@router.get("/recent", response_model=List[dict])
+async def get_recent_transactions(
+    limit: int = Query(10, gt=0, le=50),
+    db: Session = Depends(get_db)
+):
+    """Get recent transactions with customer details."""
+    try:
+        transactions = (
+            db.query(Transaction, Customer)
+            .join(Customer)
+            .order_by(Transaction.timestamp.desc())
+            .limit(limit)
+            .all()
+        )
+
+        result = [
+            {
+                'id': t.Transaction.id,
+                'customer_email': t.Customer.email,
+                'amount': float(t.Transaction.total_amount),
+                'status': t.Transaction.status,
+                'timestamp': t.Transaction.timestamp.isoformat(),
+                'items': t.Transaction.quantity,
+                'payment_method': t.Transaction.payment_method
+            }
+            for t in transactions
+        ]
+
+        logger.info(f"Retrieved {len(result)} recent transactions")
+        return result
+
+    except Exception as e:
+        logger.error(f"Error retrieving recent transactions: {str(e)}")
+        raise
+
 @router.get("/{transaction_id}", response_model=TransactionResponse)
 async def get_transaction(
     transaction_id: int,

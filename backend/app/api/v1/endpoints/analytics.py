@@ -403,8 +403,8 @@ async def get_hourly_sales(
         sales_data = get_sales_by_hour(db, hours)
         
         if sales_data:
-            total_sales = sum(hour['total_amount'] for hour in sales_data)
-            total_transactions = sum(hour['transaction_count'] for hour in sales_data)
+            total_sales = sum(hour['total_sales'] for hour in sales_data)
+            total_transactions = sum(hour['num_transactions'] for hour in sales_data)
             logger.info(
                 f"Retrieved hourly sales: hours={hours}, "
                 f"total_sales=${total_sales:.2f}, "

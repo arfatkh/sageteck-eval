@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 async def get_dashboard_overview(db: Session = Depends(get_db)):
     """
     Get comprehensive dashboard overview including:
-    - Sales metrics (24h)
+    - Sales metrics (24h and lifetime)
     - Customer metrics
     - Transaction metrics
     - Low stock alerts
@@ -32,7 +32,8 @@ async def get_dashboard_overview(db: Session = Depends(get_db)):
         day_window = timedelta(days=1)
         
         # Gather all metrics
-        total_sales = get_total_sales(db, day_window)
+        total_sales_24h = get_total_sales(db, day_window)
+        total_sales_lifetime = get_total_sales(db)  # No time window for lifetime
         hourly_sales = get_sales_by_hour(db, 24)
         customer_metrics = get_customer_metrics(db)
         transaction_metrics = get_transaction_metrics(db, day_window)
@@ -41,7 +42,8 @@ async def get_dashboard_overview(db: Session = Depends(get_db)):
         
         overview = {
             "sales": {
-                "total_24h": total_sales,
+                "total_24h": total_sales_24h,
+                "total_lifetime": total_sales_lifetime,
                 "hourly_breakdown": hourly_sales
             },
             "customers": customer_metrics,
@@ -55,7 +57,8 @@ async def get_dashboard_overview(db: Session = Depends(get_db)):
         # Log important metrics
         logger.info(
             f"Dashboard overview: "
-            f"total_sales_24h=${total_sales:.2f}, "
+            f"total_sales_24h=${total_sales_24h:.2f}, "
+            f"total_sales_lifetime=${total_sales_lifetime:.2f}, "
             f"low_stock_count={len(low_stock)}, "
             f"suspicious_transactions={len(suspicious)}"
         )
